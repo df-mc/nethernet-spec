@@ -13,8 +13,9 @@ information here is from reverse engineering `v1.20.50` of the game.
 LAN discovery is done on the `7551` port. Clients send a request packet to the broadcast address of the network. Servers
 broadcast back a response packet with their name, game mode, and other information.
 
-Discovery packets are encrypted and are prefixed with a checksum. The encryption algorithm itself is `AES-ECB` with the
-key being the `SHA-256` hash of `0xdeadbeef`. The checksum is an `HMAC` with `SHA-256` and the same key.
+Discovery packets are encrypted and are prefixed with a checksum. The encryption algorithm itself is `AES-ECB` with
+PKCS5/7 padding. The encryption key is the `SHA-256` hash of `0xdeadbeef` encoded as a 64 bit little endian integer.
+The checksum is a `SHA-256` `HMAC` of the unencrypted packet, using the same key as for encryption.
 
 Each discovery packet starts with the packet length (`uint16`), packet type (`uint16`), and sender ID (`uint64`). After
 that, there is an 8-byte padding, followed by the actual packet data.
