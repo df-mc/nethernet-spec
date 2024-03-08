@@ -6,7 +6,7 @@ on LAN and Xbox Live games. It cannot currently be used over direct connections.
 
 The protocol is currently not very well documented, so this covers everything needed to implement it. Keep in mind that
 since this is a new protocol, it is subject to change at any time and thus this document may become outdated. All
-information here is from reverse engineering `v1.20.50` of the game.
+information here is from reverse engineering `v1.20.50` of the game, with updates from testing with `v1.20.62`.
 
 ## Data formats
 
