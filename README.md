@@ -8,13 +8,17 @@ The protocol is currently not very well documented, so this covers everything ne
 since this is a new protocol, it is subject to change at any time and thus this document may become outdated. All
 information here is from reverse engineering `v1.20.50` of the game.
 
+## Data formats
+
+All numbers are encoded little-endian. Strings are length prefixed, with either a uint8 or uint32 integer.
+
 ## LAN discovery
 
 LAN discovery is done on the `7551` port. Clients send a request packet to the broadcast address of the network. Servers
 broadcast back a response packet with their name, game mode, and other information.
 
 Discovery packets are encrypted and are prefixed with a checksum. The encryption algorithm itself is `AES-ECB` with
-PKCS5/7 padding. The encryption key is the `SHA-256` hash of `0xdeadbeef` encoded as a 64 bit little endian integer.
+PKCS5/7 padding. The encryption key is the `SHA-256` hash of `0xdeadbeef` encoded as a 64 bit little-endian integer.
 The checksum is a `SHA-256` `HMAC` of the unencrypted packet, using the same key as for encryption.
 
 Each discovery packet starts with the packet length (`uint16`), packet type (`uint16`), and sender ID (`uint64`). After
@@ -52,11 +56,12 @@ There are three discovery packets that are currently used:
 
 `DiscoveryRequestPacket` does not have any additional data. It is broadcasted by clients to look for servers on LAN.
 
-`DiscoveryResponsePacket` sends a hex-encoded `ServerData` payload. The structure of it is as follows:
+`DiscoveryResponsePacket` sends a `ServerData` payload, which is a uint32 prefixed string. The string contains hex
+encoded data. The structure of the hex decoded data is as follows:
 
 - Version (`uint8`)
-- Server name (`string`)
-- Level name (`string`)
+- Server name (`string`, uint8 prefix)
+- Level name (`string`, uint8 prefix)
 - Game type (`int32`)
 - Player count (`int32`)
 - Max player count (`int32`)
