@@ -6,15 +6,20 @@ on LAN and Xbox Live games. It cannot currently be used over direct connections.
 
 The protocol is currently not very well documented, so this covers everything needed to implement it. Keep in mind that
 since this is a new protocol, it is subject to change at any time and thus this document may become outdated. All
-information here is from reverse engineering `v1.20.50` of the game.
+information here is from reverse engineering `v1.20.50` of the game, with updates from testing with `v1.20.62`.
+
+## Data formats
+
+All numbers are encoded little-endian. Strings are length prefixed, with either a `uint8` or `uint32` integer.
 
 ## LAN discovery
 
 LAN discovery is done on the `7551` port. Clients send a request packet to the broadcast address of the network. Servers
 broadcast back a response packet with their name, game mode, and other information.
 
-Discovery packets are encrypted and are prefixed with a checksum. The encryption algorithm itself is `AES-ECB` with the
-key being the `SHA-256` hash of `0xdeadbeef`. The checksum is an `HMAC` with `SHA-256` and the same key.
+Discovery packets are encrypted and are prefixed with a checksum. The encryption algorithm itself is `AES-ECB` with
+PKCS5/7 padding. The encryption key is the `SHA-256` hash of `0xdeadbeef` encoded as a 64 bit little-endian integer.
+The checksum is a `SHA-256` `HMAC` of the unencrypted packet, using the same key as for encryption.
 
 Each discovery packet starts with the packet length (`uint16`), packet type (`uint16`), and sender ID (`uint64`). After
 that, there is an 8-byte padding, followed by the actual packet data.
@@ -51,11 +56,12 @@ There are three discovery packets that are currently used:
 
 `DiscoveryRequestPacket` does not have any additional data. It is broadcasted by clients to look for servers on LAN.
 
-`DiscoveryResponsePacket` sends a hex-encoded `ServerData` payload. The structure of it is as follows:
+`DiscoveryResponsePacket` sends a `ServerData` payload, which is a uint32 prefixed string. The string contains hex
+encoded data. The structure of the hex decoded data is as follows:
 
 - Version (`uint8`)
-- Server name (`string`)
-- Level name (`string`)
+- Server name (`string`, `uint8` prefix)
+- Level name (`string`, `uint8` prefix)
 - Game type (`int32`)
 - Player count (`int32`)
 - Max player count (`int32`)
@@ -111,7 +117,7 @@ There are three message types used for WebRTC negotiation:
 - `CONNECTRESPONSE`
 - `CANDIDATEADD`
 
-The connection ID is a unique ID for each connection.
+The connection ID is a unique ID for each connection. For a given negotiation, all messages will have the same ID.
 
 `CONNECTREQUEST` just contains the SDP offer from the client. The server responds with a `CONNECTRESPONSE` containing
 the SDP answer. After that, the client sends `CANDIDATEADD` messages with its ICE candidates. Once it has sent around
@@ -165,17 +171,39 @@ Below is an example of a client's SDP offer:
 	}
 ```
 
+The following is an actual CONNECTREQUEST sent by a client, some elements replaced with `<size>`:
+
+```
+CONNECTREQUEST <random connection ID> v=0
+o=- <random ID> 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=group:BUNDLE 0
+a=extmap-allow-mixed
+a=msid-semantic: WMS
+m=application 9 UDP/DTLS/SCTP webrtc-datachannel
+c=IN IP4 0.0.0.0
+a=ice-ufrag:<4 characters>
+a=ice-pwd:<24 characters>
+a=ice-options:trickle
+a=fingerprint:sha-256 DB:23:<28 hex encoded bytes>:A1:D9
+a=setup:actpass
+a=mid:0
+a=sctp-port:5000
+a=max-message-size:<integer>
+```
+
 Effectively the same thing is done for the SDP answer, except the `setup` attribute is set to `active` instead of
 `actpass`.
 
 `CANDIDATEADD`'s data follows the standard ICE candidate string format. An example of one is below:
 ```
-candidate:XXXXXXXXXX 1 udp XXXXXXXXXX 127.0.0.1 12345 typ host generation 0 ufrag +2gl network-id 1 network-cost 10
+CANDIDATEADD <connection ID> candidate:XXXXXXXXXX 1 udp XXXXXXXXXX 127.0.0.1 12345 typ host generation 0 ufrag XXXX network-id 1 network-cost 10
 ```
 
 ## WebRTC connection
 Once the ICE connection is made, the client will also attempt to set up DTLS and then SCTP. Once SCTP is set up, the
-client will create two data channels:
+client will create two (non-negotiated, defined in-band) data channels:
 - `ReliableDataChannel`
 - `UnreliableDataChannel`
 
